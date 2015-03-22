@@ -1,0 +1,17 @@
+{
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "globals": {
+    "$": true,
+    "jQuery": true
+  },
+  "rules": {
+    "quotes": [2, "single"],
+    "curly": 0,
+    "no-underscore-dangle": 0,
+    "key-spacing": 0,
+    "no-alert": 0
+  }
+}
