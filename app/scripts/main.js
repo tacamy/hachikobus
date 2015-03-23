@@ -54,38 +54,119 @@
 (function ($, window, document, undefined) {
   'use strict';
 
+  // データ
+  var busstopData = {};
+  var timetableData = {};
+
+  // 地図
   var map = {};
 
-  var tile = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // タイル
+  var base = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: 'map data &copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
   });
 
+  // バス停
   var busstop = L.layerGroup();
 
-  var promise = createMarker();
-
-  promise.done(function () {
-    map = L.map('map', {
-      layers: [tile, busstop]
-    }).setView([35.674412, 139.710797], 15);
+  // アイコン
+  var locateIcon = L.icon({
+    iconUrl: '/images/marker-location.png',
+    iconRetinaUrl: '/images/marker-location@2x.png',
+    iconSize: [35, 47]
   });
 
-  function createMarker() {
-    var d = new $.Deferred;
+  var busIcon = L.icon({
+    iconUrl: '/images/marker-bus.png',
+    iconRetinaUrl: '/images/marker-bus@2x.png',
+    iconSize: [40, 44]
+  });
 
-    $.ajax({
-      url: '/scripts/data.json',
-      dataType: 'json'
-    })
-    .done(function (data) {
-      data.items.forEach(function (item) {
-        var marker = L.marker(item.coordinates).bindPopup(item.number + ' : ' + item.name);
-        busstop.addLayer(marker);
-      });
-      d.resolve();
+  $.ajax({
+    url: '/scripts/_shibuya.json',
+    dataType: 'json'
+  })
+  .done(function (data) {
+    busstopData = data;
+
+    data.items.forEach(function (item) {
+      var marker = L.marker(item.coordinates).bindPopup(item.id + ' : ' + item.name);
+      busstop.addLayer(marker);
     });
 
-    return d.promise();
-  }
+    map = L.map('map', {
+      layers: [base, busstop]
+    });
+
+    // 現在地取得
+    map.locate({setView: true, maxZoom: 16});
+    map.on('locationfound', onLocationFound);
+    map.on('locationerror', onLocationError);
+
+    // 現在地取得成功
+    function onLocationFound(e) {
+      L.marker(e.latlng, {icon: locateIcon}).addTo(map);
+    }
+
+    // 現在地取得失敗
+    function onLocationError(e) {
+      console.log(e.message);
+    }
+  });
+
+
+  $.ajax({
+    url: '/scripts/timetable.json',
+    dataType: 'json'
+  })
+  .done(function (data) {
+    timetableData = data;
+
+    // 現在の時刻を取得
+    var now = moment().format('HH:mm');
+    var prev = null;
+
+    // 時刻表から現在の時刻と一致するレコードを取得
+    var matched = _.find(timetableData.timetable, function (item, i) {
+      if (i === 0) {
+        return item.time === now;
+      }
+      else {
+        prev = timetableData.timetable[i - 1];
+        return item.time >= now;
+      }
+    });
+
+    if (!matched) {
+      console.log('現在走っているバスはありません');
+    }
+    else {
+      console.log(matched.id);
+      console.log(prev.id);
+
+      // 現在の時刻に到着するバス停を取得
+      var nextBus = _.find(busstopData.items, function (item) {
+        return item.id === matched.id;
+      });
+
+      var prevBus = _.find(busstopData.items, function (item) {
+        return item.id === prev.id;
+      });
+
+      var coordinates = [];
+
+      console.log(nextBus.coordinates);
+      console.log(prevBus.coordinates);
+
+      coordinates.push((nextBus.coordinates[0] + prevBus.coordinates[0]) / 2);
+      coordinates.push((nextBus.coordinates[1] + prevBus.coordinates[1]) / 2);
+
+      console.log(coordinates);
+
+      // 走行中のバスマーカーを地図に追加
+      L.marker(coordinates, {icon: busIcon}).addTo(map);
+    }
+  });
+
 
 })(jQuery, this, this.document);
